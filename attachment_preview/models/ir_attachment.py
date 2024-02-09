@@ -41,27 +41,39 @@ class IrAttachment(models.Model):
         ids_to_browse = [_id for _id in ids_to_browse if _id not in result]
         for this in self.env[model].with_context(bin_size=True).browse(ids_to_browse):
             result[this.id] = False
-            try:
-                import magic
+            if this[binary_field]:
+                try:
+                    import magic
 
-                if model == self._name and binary_field == "datas" and this.store_fname:
-                    mimetype = magic.from_file(
-                        this._full_path(this.store_fname), mime=True
+                    if (
+                        model == self._name
+                        and binary_field == "datas"
+                        and this.store_fname
+                    ):
+                        mimetype = magic.from_file(
+                            this._full_path(this.store_fname), mime=True
+                        )
+                        _logger.debug(
+                            "Magic determined mimetype %s from file %s",
+                            mimetype,
+                            this.store_fname,
+                        )
+                    else:
+                        mimetype = magic.from_buffer(this[binary_field], mime=True)
+                        _logger.debug(
+                            "Magic determined mimetype %s from buffer", mimetype
+                        )
+                except ImportError:
+                    (mimetype, encoding) = mimetypes.guess_type(
+                        "data:;base64," + this[binary_field].decode("utf-8"),
+                        strict=False,
                     )
-                    _logger.debug(
-                        "Magic determined mimetype %s from file %s",
-                        mimetype,
-                        this.store_fname,
-                    )
-                else:
-                    mimetype = magic.from_buffer(this[binary_field], mime=True)
-                    _logger.debug("Magic determined mimetype %s from buffer", mimetype)
-            except ImportError:
-                (mimetype, encoding) = mimetypes.guess_type(
-                    "data:;base64," + this[binary_field].decode("utf-8"), strict=False
+                    _logger.debug("Mimetypes guessed type %s from buffer", mimetype)
+                extension = mimetypes.guess_extension(
+                    mimetype.split(";")[0], strict=False
                 )
-                _logger.debug("Mimetypes guessed type %s from buffer", mimetype)
-            extension = mimetypes.guess_extension(mimetype.split(";")[0], strict=False)
+            else:
+                extension = False
             result[this.id] = extension
         for _id in result:
             result[_id] = (result[_id] or "").lstrip(".").lower()
